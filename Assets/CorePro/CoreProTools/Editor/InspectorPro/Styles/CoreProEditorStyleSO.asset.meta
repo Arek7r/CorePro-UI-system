@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3a71671fbf6aa2f46b66b53d0d8546eb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 323367
+  packageName: Weapon System Pro - FREE
+  packageVersion: 1.0
+  assetPath: Assets/CorePro/InspectorPro/Editor/Styles/CoreProEditorStyleSO.asset
+  uploadId: 779048

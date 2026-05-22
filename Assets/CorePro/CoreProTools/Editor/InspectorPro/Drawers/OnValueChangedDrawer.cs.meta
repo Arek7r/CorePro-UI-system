@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: 9e13ae0bc7164c9e86bb57e0780ebb2d
+timeCreated: 1749481280
+AssetOrigin:
+  serializedVersion: 1
+  productId: 323367
+  packageName: Weapon System Pro - FREE
+  packageVersion: 1.0
+  assetPath: Assets/CorePro/InspectorPro/Attributes/Editor/OnValueChangedDrawer.cs
+  uploadId: 779048

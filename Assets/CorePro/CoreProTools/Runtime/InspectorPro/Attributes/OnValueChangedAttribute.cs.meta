@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: c025c12d22b042c2b7ef973ddce12b23
+timeCreated: 1749481208
+AssetOrigin:
+  serializedVersion: 1
+  productId: 323367
+  packageName: Weapon System Pro - FREE
+  packageVersion: 1.0
+  assetPath: Assets/CorePro/InspectorPro/Attributes/OnValueChangedAttribute.cs
+  uploadId: 779048

@@ -1,0 +1,20 @@
+{
+    "name": "CorePro.CoreTools.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:35f5a1cb2fbb9bb4bb76f6501fcc925e",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:a14cc638318d1a64a9dba25a6124137f"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

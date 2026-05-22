@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccc989a2c0ee41b4a8dbff1713465467, type: 3}
+  m_Name: AudioLibrary
+  m_EditorClassIdentifier: Assembly-CSharp::CorePro.Audio.AudioLibrary
+  buses:
+  - name: Master
+    mixerGroup: {fileID: 0}
+    volume: 1
+    muted: 0
+    soloed: 0
+    polyphony: 8
+    allowVoiceStealing: 1
+    playLimitInterval: 0
+  sfx: []
+  music:
+  - name: New Music
+    mixerGroup: {fileID: 0}
+    volume: 0
+    muted: 0
+    fadeDuration: 0
+    loop: 0
+    shuffle: 0
+    playOnStart: 0
+    playbackMode: 0
+    tracks: []
+  defaultLoadMode: 1
+  defaultUnloadDelay: 60
+  masterVolumeKey: CoreAudio_Master
+  musicVolumeKey: CoreAudio_Music
+  sfxVolumeKey: CoreAudio_SFX
+  voiceVolumeKey: CoreAudio_Voice
+  manualPoolSize: 32
+  generatedCodeFolder: CorePro/Generated
+  generatedNamespace: CorePro.Audio.Generated
+  _guidHash: 1461997015
