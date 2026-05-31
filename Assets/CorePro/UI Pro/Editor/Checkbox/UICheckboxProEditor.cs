@@ -30,6 +30,12 @@ namespace CorePro.UI.Editor
         SerializedProperty _stateGoMode;
         SerializedProperty _stateGoFadeInDuration;
         SerializedProperty _stateGoFadeOutDuration;
+        SerializedProperty _useColorTransition;
+        SerializedProperty _useColorStyleSheet;
+        SerializedProperty _colorTransitionSheet;
+        SerializedProperty _colorTransitions;
+        SerializedProperty _colorDuration;
+        SerializedProperty _colorCurve;
 
         // Save
         SerializedProperty _saveValue;
@@ -82,6 +88,12 @@ namespace CorePro.UI.Editor
             _stateGoMode            = serializedObject.FindProperty("stateGoMode");
             _stateGoFadeInDuration  = serializedObject.FindProperty("stateGoFadeInDuration");
             _stateGoFadeOutDuration = serializedObject.FindProperty("stateGoFadeOutDuration");
+            _useColorTransition     = serializedObject.FindProperty("useColorTransition");
+            _useColorStyleSheet     = serializedObject.FindProperty("useColorStyleSheet");
+            _colorTransitionSheet   = serializedObject.FindProperty("colorTransitionSheet");
+            _colorTransitions       = serializedObject.FindProperty("colorTransitions");
+            _colorDuration          = serializedObject.FindProperty("colorDuration");
+            _colorCurve             = serializedObject.FindProperty("colorCurve");
 
             // Save
             _saveValue        = serializedObject.FindProperty("saveValue");
@@ -183,6 +195,7 @@ namespace CorePro.UI.Editor
                     _isOn.boolValue = !_isOn.boolValue;
                     serializedObject.ApplyModifiedProperties();
                     cb.ForceSetValue(_isOn.boolValue, animated: false);
+                    cb.Editor_SnapColors(_isOn.boolValue);
                     EditorUtility.SetDirty(cb);
                     Repaint();
                 }
@@ -351,7 +364,6 @@ namespace CorePro.UI.Editor
             {
                 // Checkmark CanvasGroup 
                 DrawSubHeader("Checkmark CanvasGroup");
-                EditorGUI.indentLevel++;
 
                 EditorGUILayout.PropertyField(_useFade, new GUIContent("Use Fade",
                     "Fades checkmarkCG in/out. If false - alpha snaps instantly."));
@@ -361,30 +373,20 @@ namespace CorePro.UI.Editor
                     if (_checkmarkCG.objectReferenceValue == null)
                         EditorGUILayout.HelpBox("Use Fade requires a Checkmark CanvasGroup to be assigned.", MessageType.Warning);
 
-                    EditorGUI.indentLevel++;
 
-                    DrawSubHeader("Fade In");
-                    EditorGUI.indentLevel++;
+                    DrawSubHeaderH3("Fade In");
                     EditorGUILayout.PropertyField(_fadeInDuration, new GUIContent("Duration (s)"));
                     EditorGUILayout.PropertyField(_fadeInCurve,    new GUIContent("Curve"));
-                    EditorGUI.indentLevel--;
 
-                    DrawSubHeader("Fade Out");
-                    EditorGUI.indentLevel++;
+                    DrawSubHeaderH3("Fade Out");
                     EditorGUILayout.PropertyField(_fadeOutDuration, new GUIContent("Duration (s)"));
                     EditorGUILayout.PropertyField(_fadeOutCurve,    new GUIContent("Curve"));
-                    EditorGUI.indentLevel--;
-
-                    EditorGUI.indentLevel--;
                 }
-
-                EditorGUI.indentLevel--;
 
                 EditorGUILayout.Space(4);
 
                 // State GameObjects (stateOnGO / stateOffGO) 
-                DrawSubHeader("State GameObjects");
-                EditorGUI.indentLevel++;
+                DrawSubHeader("ON/OFF GameObjects");
 
                 EditorGUILayout.PropertyField(_stateGoMode, new GUIContent("Transition Mode",
                     "Instant: SetActive on/off immediately.\nFade: crossfade via CanvasGroup alpha, then SetActive(false)."));
@@ -395,15 +397,45 @@ namespace CorePro.UI.Editor
                     if (_stateOnGO.objectReferenceValue == null && _stateOffGO.objectReferenceValue == null)
                         EditorGUILayout.HelpBox("Fade mode needs at least one State GO (CanvasGroup) assigned in References.", MessageType.Warning);
 
-                    EditorGUI.indentLevel++;
                     EditorGUILayout.PropertyField(_stateGoFadeInDuration,  new GUIContent("Fade In Duration (s)",
                         "Duration of the fade when switching to the ON state."));
                     EditorGUILayout.PropertyField(_stateGoFadeOutDuration, new GUIContent("Fade Out Duration (s)",
                         "Duration of the fade when switching to the OFF state."));
-                    EditorGUI.indentLevel--;
                 }
 
-                EditorGUI.indentLevel--;
+                EditorGUILayout.Space(4);
+
+                // Color Transition
+                DrawSubHeader("Color Transition");
+
+                EditorGUILayout.PropertyField(_useColorTransition, new GUIContent("Use Color Transition",
+                    "Tint target Images from Unchecked color to Checked color."));
+
+                if (_useColorTransition.boolValue)
+                {
+                    EditorGUILayout.Space(2);
+                    EditorGUILayout.PropertyField(_colorDuration, new GUIContent("Color Duration (s)"));
+                    EditorGUILayout.PropertyField(_colorCurve,    new GUIContent("Color Curve"));
+                    EditorGUILayout.HelpBox(
+                        "If a target has ImageRounded, its 'Use Own Colors' is forced off so the tint applies.",
+                        MessageType.None);
+
+                    EditorGUILayout.Space(10);
+                    EditorGUILayout.PropertyField(_useColorStyleSheet, new GUIContent("Use Style Sheet",
+                        "Pick colors from a UIStyleSheet instead of custom Unchecked / Checked values."));
+
+                    if (_useColorStyleSheet.boolValue)
+                    {
+                        EditorGUILayout.PropertyField(_colorTransitionSheet, new GUIContent("Style Sheet",
+                            "Color slots are read from this sheet by index."));
+
+                        if (_colorTransitionSheet.objectReferenceValue == null)
+                            EditorGUILayout.HelpBox("Assign a Style Sheet to pick color slots.", MessageType.Warning);
+                    }
+
+                    EditorGUILayout.PropertyField(_colorTransitions,
+                        new GUIContent("Targets (Image / Unchecked / Checked)"), true);
+                }
             }
         }
 
@@ -494,6 +526,99 @@ namespace CorePro.UI.Editor
                 EditorStyles.centeredGreyMiniLabel);
         }
 
+    }
+
+    // Per-element drawer for UICheckboxPro color transition targets.
+    // Drawn through the native list so it keeps the standard reorderable look,
+    // indentation and foldout. Reads the sibling useColorStyleSheet / colorTransitionSheet
+    // fields to decide between custom Color fields and style-sheet slot dropdowns.
+    [CustomPropertyDrawer(typeof(UICheckboxPro.ColorTransitionEntry))]
+    public class CheckboxColorTransitionEntryDrawer : PropertyDrawer
+    {
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+        {
+            float line    = EditorGUIUtility.singleLineHeight;
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+
+            if (!property.isExpanded)
+                return line;
+
+            // Foldout + Target + Unchecked + Checked
+            return (line + spacing) * 4f;
+        }
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            float line    = EditorGUIUtility.singleLineHeight;
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+
+            Rect foldRect = new Rect(position.x, position.y, position.width, line);
+            property.isExpanded = EditorGUI.Foldout(foldRect, property.isExpanded, label, true);
+
+            if (!property.isExpanded)
+                return;
+
+            EditorGUI.indentLevel++;
+
+            float y = position.y + line + spacing;
+            Rect r0 = new Rect(position.x, y, position.width, line);
+            EditorGUI.PropertyField(r0, property.FindPropertyRelative("target"), new GUIContent("Target"));
+
+            SerializedObject so = property.serializedObject;
+            bool useSheet = so.FindProperty("useColorStyleSheet").boolValue;
+            UIStyleSheet sheet = so.FindProperty("colorTransitionSheet").objectReferenceValue as UIStyleSheet;
+
+            y += line + spacing;
+            Rect r1 = new Rect(position.x, y, position.width, line);
+
+            y += line + spacing;
+            Rect r2 = new Rect(position.x, y, position.width, line);
+
+            if (useSheet && sheet != null)
+            {
+                string[] names = BuildColorNames(sheet);
+                DrawSlotRow(r1, "Unchecked", sheet, names, property.FindPropertyRelative("slotUnchecked"));
+                DrawSlotRow(r2, "Checked",   sheet, names, property.FindPropertyRelative("slotChecked"));
+            }
+            else
+            {
+                EditorGUI.PropertyField(r1, property.FindPropertyRelative("colorUnchecked"), new GUIContent("Unchecked"));
+                EditorGUI.PropertyField(r2, property.FindPropertyRelative("colorChecked"),   new GUIContent("Checked"));
+            }
+
+            EditorGUI.indentLevel--;
+        }
+
+        static void DrawSlotRow(Rect r, string label, UIStyleSheet sheet, string[] colorNames, SerializedProperty slotProp)
+        {
+            const float swatchW = 18f;
+            const float gap     = 4f;
+
+            Rect swatchRect = new Rect(r.xMax - swatchW, r.y, swatchW, r.height);
+            Rect popupRect  = new Rect(r.x, r.y, swatchRect.x - r.x - gap, r.height);
+
+            int cur  = Mathf.Clamp(slotProp.intValue, 0, colorNames.Length - 1);
+            int next = EditorGUI.Popup(popupRect, label, cur, colorNames);
+            if (next != cur)
+                slotProp.intValue = next;
+
+            EditorGUI.DrawRect(swatchRect, sheet.GetColor(next));
+        }
+
+        static string[] BuildColorNames(UIStyleSheet sheet)
+        {
+            if (sheet == null)
+                return new[] { "-" };
+
+            var names = new string[sheet.Colors.Count];
+            for (int i = 0; i < sheet.Colors.Count; i++)
+            {
+                names[i] = string.IsNullOrWhiteSpace(sheet.Colors[i].name)
+                    ? $"Slot {i}"
+                    : $"{i}: {sheet.Colors[i].name}";
+            }
+            return names;
+        }
     }
 }
 #endif

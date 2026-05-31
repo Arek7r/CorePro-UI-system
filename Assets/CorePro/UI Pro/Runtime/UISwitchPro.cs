@@ -1,4 +1,5 @@
-﻿using InspectorPro;
+﻿using System.Collections.Generic;
+using InspectorPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
@@ -51,6 +52,26 @@ namespace CorePro.UI
         [SerializeField]
         private AnimationCurve handleCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
+        [Tooltip("Smoothly tint target Images between OFF and ON colors. Only used in GenericHandle mode.")]
+        [SerializeField]
+        private bool useColorTransition = false;
+
+        [Tooltip("Pick colors from a UIStyleSheet instead of custom Color Off / Color On values.")]
+        [SerializeField]
+        private bool useColorStyleSheet = false;
+
+        [SerializeField]
+        private UIStyleSheet colorTransitionSheet;
+
+        [SerializeField]
+        private List<ColorTransitionEntry> colorTransitions = new List<ColorTransitionEntry>();
+
+        [SerializeField, Min(0.001f)]
+        private float colorDuration = 0.2f;
+
+        [SerializeField]
+        private AnimationCurve colorCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
         [Group("Save")]
         [SerializeField]
         private bool saveValue = false;
@@ -94,6 +115,16 @@ namespace CorePro.UI
 
         public enum AnimationMode { None, Animator, GenericHandle, Both }
 
+        [System.Serializable]
+        public class ColorTransitionEntry
+        {
+            public Image target;
+            public Color colorOff = new Color(0.5f, 0.5f, 0.5f, 1f);
+            public Color colorOn  = new Color(0.18f, 0.62f, 0.28f, 1f);
+            [HideInInspector] public int slotOff = 0;
+            [HideInInspector] public int slotOn  = 0;
+        }
+
         #endregion
 
         #region State
@@ -118,6 +149,13 @@ namespace CorePro.UI
         private float _handleTo = 0f;
         private bool _handlePending = false;
 
+        // Color transition
+        private float _colorElapsed = 0f;
+        private float _colorDuration = 0f;
+        private bool _colorPending = false;
+        private bool _colorToOn = false;
+        private Color[] _colorFrom; // per entry, allocated lazily
+
         private bool _isInitialized = false;
 
         #endregion
@@ -136,6 +174,8 @@ namespace CorePro.UI
 #endif
             _prefsKey = PrefsPrefix + saveKey;
 
+            PrepareColorTargets();
+
             if (useUINavigation)
                 EnsureNavButton();
 
@@ -152,6 +192,8 @@ namespace CorePro.UI
 
         private void OnEnable()
         {
+            UIStyleSheet.OnThemeChanged += OnColorSheetChanged;
+
             if (!_isInitialized) return;
 
             // If animator or handle is mid-animation, let it finish
@@ -159,14 +201,21 @@ namespace CorePro.UI
                 ApplyInstant(isOn);
         }
 
+        private void OnDisable()
+        {
+            UIStyleSheet.OnThemeChanged -= OnColorSheetChanged;
+        }
+
         private void Update()
         {
-            if (!_animatorPending && !_handlePending && Mathf.Approximately(_highlightAlpha, _highlightTarget))
+            if (!_animatorPending && !_handlePending && !_colorPending &&
+                Mathf.Approximately(_highlightAlpha, _highlightTarget))
                 return;
 
             TickHighlight();
             TickAnimatorDisable();
             TickHandle();
+            TickColor();
         }
 
         #region Public API
@@ -272,6 +321,9 @@ namespace CorePro.UI
 
             if ((animationMode == AnimationMode.GenericHandle || animationMode == AnimationMode.Both) && handleRect != null)
                 StartHandleSlide(value, instant: false);
+
+            if (ColorTransitionActive)
+                StartColorTween(value, instant: false);
         }
 
         private void ApplyInstant(bool value)
@@ -287,6 +339,9 @@ namespace CorePro.UI
 
             if ((animationMode == AnimationMode.GenericHandle || animationMode == AnimationMode.Both) && handleRect != null)
                 StartHandleSlide(value, instant: true);
+
+            if (ColorTransitionActive)
+                StartColorTween(value, instant: true);
         }
 
         #endregion
@@ -358,6 +413,100 @@ namespace CorePro.UI
             var pos = handleRect.anchoredPosition;
             pos.x = x;
             handleRect.anchoredPosition = pos;
+        }
+
+        #endregion
+
+        #region Generic color transition
+
+        private bool ColorTransitionActive =>
+            useColorTransition && animationMode == AnimationMode.GenericHandle && colorTransitions.Count > 0;
+
+        private Color ResolveEntryColor(ColorTransitionEntry e, bool forOn)
+        {
+            if (useColorStyleSheet && colorTransitionSheet != null)
+                return colorTransitionSheet.GetColor(forOn ? e.slotOn : e.slotOff);
+
+            return forOn ? e.colorOn : e.colorOff;
+        }
+
+        private void OnColorSheetChanged(UIStyleSheet changed)
+        {
+            if (changed != colorTransitionSheet || !ColorTransitionActive)
+                return;
+
+            if (!_colorPending)
+                SetColorsInstant(isOn);
+        }
+
+        private void PrepareColorTargets()
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                if (e.target.TryGetComponent<ImageRounded>(out var rounded))
+                    rounded.SetUseOwnColors(false);
+            }
+        }
+
+        private void StartColorTween(bool value, bool instant)
+        {
+            if (instant)
+            {
+                SetColorsInstant(value);
+                _colorPending = false;
+                return;
+            }
+
+            if (_colorFrom == null || _colorFrom.Length != colorTransitions.Count)
+                _colorFrom = new Color[colorTransitions.Count];
+
+            for (int i = 0; i < colorTransitions.Count; i++)
+            {
+                var e = colorTransitions[i];
+                _colorFrom[i] = e?.target != null ? e.target.color : Color.white;
+            }
+
+            _colorElapsed  = 0f;
+            _colorDuration = colorDuration;
+            _colorToOn     = value;
+            _colorPending  = true;
+        }
+
+        private void TickColor()
+        {
+            if (!_colorPending)
+                return;
+
+            _colorElapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(_colorElapsed / _colorDuration);
+            float k = colorCurve.Evaluate(t);
+
+            for (int i = 0; i < colorTransitions.Count; i++)
+            {
+                var e = colorTransitions[i];
+                if (e?.target == null)
+                    continue;
+
+                Color to = ResolveEntryColor(e, _colorToOn);
+                e.target.color = Color.LerpUnclamped(_colorFrom[i], to, k);
+            }
+
+            if (t >= 1f)
+                _colorPending = false;
+        }
+
+        private void SetColorsInstant(bool toOn)
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                e.target.color = ResolveEntryColor(e, toOn);
+            }
         }
 
         #endregion
@@ -509,6 +658,24 @@ namespace CorePro.UI
             if (handleRect == null) return;
             SetHandlePosition(toOn ? handlePosOn : handlePosOff);
             UnityEditor.EditorUtility.SetDirty(handleRect);
+        }
+
+        public void Editor_SnapColors(bool toOn)
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                if (e.target.TryGetComponent<ImageRounded>(out var rounded))
+                {
+                    rounded.SetUseOwnColors(false);
+                    UnityEditor.EditorUtility.SetDirty(rounded);
+                }
+
+                e.target.color = ResolveEntryColor(e, toOn);
+                UnityEditor.EditorUtility.SetDirty(e.target);
+            }
         }
 
         [ContextMenu("Debug / Force Refresh UI")]

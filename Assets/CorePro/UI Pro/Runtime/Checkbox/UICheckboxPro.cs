@@ -91,6 +91,22 @@ namespace CorePro.UI
         [ShowIfAll(nameof(stateGoMode), StateGoMode.Fade, nameof(animationMode), AnimationMode.Generic)]
         [SerializeField, Min(0.001f)] private float stateGoFadeOutDuration = 0.1f;
 
+        [Tooltip("Smoothly tint target Images between Unchecked and Checked colors. Only used in Generic mode.")]
+        [SerializeField] private bool useColorTransition = false;
+
+        [Tooltip("Pick colors from a UIStyleSheet instead of custom Unchecked / Checked values.")]
+        [SerializeField] private bool useColorStyleSheet = false;
+
+        [Tooltip("Optional style sheet for color slots. Leave empty to use custom colors only.")]
+        [SerializeField] private UIStyleSheet colorTransitionSheet;
+
+        [SerializeField] private System.Collections.Generic.List<ColorTransitionEntry> colorTransitions
+            = new System.Collections.Generic.List<ColorTransitionEntry>();
+
+        [SerializeField, Min(0.001f)] private float colorDuration = 0.2f;
+
+        [SerializeField] private AnimationCurve colorCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
         // =============================================
         // Inspector - Save
         // =============================================
@@ -121,6 +137,16 @@ namespace CorePro.UI
 
         [System.Serializable]
         public class CheckboxEvent : UnityEvent<bool> { }
+
+        [System.Serializable]
+        public class ColorTransitionEntry
+        {
+            public Image target;
+            public Color colorUnchecked = new Color(0.5f, 0.5f, 0.5f, 1f);
+            public Color colorChecked   = new Color(0.18f, 0.62f, 0.28f, 1f);
+            [HideInInspector] public int slotUnchecked = 0;
+            [HideInInspector] public int slotChecked   = 0;
+        }
 
         public enum AnimationMode { None, Generic, Animator }
 
@@ -171,6 +197,13 @@ namespace CorePro.UI
         private float _stateGoToOff        = 0f;
         private bool  _stateGoFadePending  = false;
 
+        // Color transition
+        private float   _colorElapsed   = 0f;
+        private float   _colorDuration  = 0f;
+        private bool    _colorPending   = false;
+        private bool    _colorToChecked = false;
+        private Color[] _colorFrom;
+
         // Animator disable timer
         private float _animatorTimer   = 0f;
         private bool  _animatorPending = false;
@@ -195,6 +228,8 @@ namespace CorePro.UI
 #endif
             _prefsKey = PrefsPrefix + saveKey;
 
+            PrepareColorTargets();
+
             if (saveValue)
                 LoadSavedState();
             else
@@ -208,6 +243,8 @@ namespace CorePro.UI
 
         private void OnEnable()
         {
+            UIStyleSheet.OnThemeChanged += OnColorSheetChanged;
+
             if (!_isInitialized) return;
 
             // Don't interrupt an in-progress animation
@@ -215,15 +252,22 @@ namespace CorePro.UI
                 ApplyInstant(isOn);
         }
 
+        private void OnDisable()
+        {
+            UIStyleSheet.OnThemeChanged -= OnColorSheetChanged;
+        }
+
         private void Update()
         {
-            if (!_fadePending && !_stateGoFadePending && !_animatorPending && Mathf.Approximately(_highlightAlpha, _highlightTarget))
+            if (!_fadePending && !_stateGoFadePending && !_animatorPending && !_colorPending &&
+                Mathf.Approximately(_highlightAlpha, _highlightTarget))
                 return;
 
             TickFade();
             TickStateGoFade();
             TickAnimatorDisable();
             TickHighlight();
+            TickColor();
         }
 
         // =============================================
@@ -430,6 +474,9 @@ namespace CorePro.UI
                     StartStateGoFade(value);
                 else
                     SwapStateGOs(value);
+
+                if (ColorTransitionActive)
+                    StartColorTween(value, instant: false);
             }
             else if (animationMode == AnimationMode.None)
             {
@@ -448,23 +495,19 @@ namespace CorePro.UI
             }
             else if (animationMode == AnimationMode.Generic)
             {
-                // Cancel any in-progress stateGO fade and snap to final state
+                // Cancel any in-progress stateGO fade and snap to final state.
+                // SwapStateGOs normalizes the CanvasGroup alphas (active -> 1, inactive -> 0).
                 _stateGoFadePending = false;
                 SwapStateGOs(value);
-
-                // When Fade mode is active we also need to reset the CanvasGroup alphas
-                // (the GO may have been mid-fade when instant was requested)
-                if (stateGoMode == StateGoMode.Fade)
-                {
-                    if (stateOnGO  != null) stateOnGO.alpha  =  value ? 1f : 0f;
-                    if (stateOffGO != null) stateOffGO.alpha = !value ? 1f : 0f;
-                }
 
                 if (checkmarkCG != null)
                 {
                     checkmarkCG.alpha = value ? 1f : 0f;
                     _fadePending      = false;
                 }
+
+                if (ColorTransitionActive)
+                    StartColorTween(value, instant: true);
             }
             else if (animationMode == AnimationMode.None)
             {
@@ -476,19 +519,18 @@ namespace CorePro.UI
         {
             if (stateOnGO  != null)
                 stateOnGO.gameObject.SetActive(value);
-            
-            if (stateOffGO != null) 
+
+            if (stateOffGO != null)
                 stateOffGO.gameObject.SetActive(!value);
 
-            if (Application.isPlaying == false)
-            {
-                if (stateOnGO  != null)
-                    stateOnGO.alpha =  value ? 1f : 0f;
-            
-                if (stateOffGO != null) 
-                    stateOffGO.alpha =  !value ? 1f : 0f;
-            }
+            // Always normalize alpha (not just in edit mode). In Instant transition the GO
+            // is only toggled via SetActive, so a CanvasGroup alpha left at 0 would make the
+            // activated GO invisible. Force the active one to 1 and the inactive one to 0.
+            if (stateOnGO  != null)
+                stateOnGO.alpha =  value ? 1f : 0f;
 
+            if (stateOffGO != null)
+                stateOffGO.alpha = !value ? 1f : 0f;
         }
 
         // =============================================
@@ -618,6 +660,100 @@ namespace CorePro.UI
         }
 
         // =============================================
+        // Generic color transition
+        // =============================================
+
+        private bool ColorTransitionActive =>
+            useColorTransition && animationMode == AnimationMode.Generic && colorTransitions.Count > 0;
+
+        private Color ResolveEntryColor(ColorTransitionEntry e, bool forChecked)
+        {
+            if (useColorStyleSheet && colorTransitionSheet != null)
+                return colorTransitionSheet.GetColor(forChecked ? e.slotChecked : e.slotUnchecked);
+
+            return forChecked ? e.colorChecked : e.colorUnchecked;
+        }
+
+        private void OnColorSheetChanged(UIStyleSheet changed)
+        {
+            if (changed != colorTransitionSheet || !ColorTransitionActive)
+                return;
+
+            if (!_colorPending)
+                SetColorsInstant(isOn);
+        }
+
+        private void PrepareColorTargets()
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                if (e.target.TryGetComponent<ImageRounded>(out var rounded))
+                    rounded.SetUseOwnColors(false);
+            }
+        }
+
+        private void StartColorTween(bool value, bool instant)
+        {
+            if (instant)
+            {
+                SetColorsInstant(value);
+                _colorPending = false;
+                return;
+            }
+
+            if (_colorFrom == null || _colorFrom.Length != colorTransitions.Count)
+                _colorFrom = new Color[colorTransitions.Count];
+
+            for (int i = 0; i < colorTransitions.Count; i++)
+            {
+                var e = colorTransitions[i];
+                _colorFrom[i] = e?.target != null ? e.target.color : Color.white;
+            }
+
+            _colorElapsed   = 0f;
+            _colorDuration  = colorDuration;
+            _colorToChecked = value;
+            _colorPending   = true;
+        }
+
+        private void TickColor()
+        {
+            if (!_colorPending)
+                return;
+
+            _colorElapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(_colorElapsed / _colorDuration);
+            float k = colorCurve.Evaluate(t);
+
+            for (int i = 0; i < colorTransitions.Count; i++)
+            {
+                var e = colorTransitions[i];
+                if (e?.target == null)
+                    continue;
+
+                Color to = ResolveEntryColor(e, _colorToChecked);
+                e.target.color = Color.LerpUnclamped(_colorFrom[i], to, k);
+            }
+
+            if (t >= 1f)
+                _colorPending = false;
+        }
+
+        private void SetColorsInstant(bool toChecked)
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                e.target.color = ResolveEntryColor(e, toChecked);
+            }
+        }
+
+        // =============================================
         // Save / Load
         // =============================================
 
@@ -682,6 +818,24 @@ namespace CorePro.UI
         // =============================================
 
 #if UNITY_EDITOR
+        public void Editor_SnapColors(bool toChecked)
+        {
+            foreach (var e in colorTransitions)
+            {
+                if (e?.target == null)
+                    continue;
+
+                if (e.target.TryGetComponent<ImageRounded>(out var rounded))
+                {
+                    rounded.SetUseOwnColors(false);
+                    UnityEditor.EditorUtility.SetDirty(rounded);
+                }
+
+                e.target.color = ResolveEntryColor(e, toChecked);
+                UnityEditor.EditorUtility.SetDirty(e.target);
+            }
+        }
+
         [Button("Toggle")]
         [ContextMenu("Debug / Toggle")]
         private void Debug_Toggle()

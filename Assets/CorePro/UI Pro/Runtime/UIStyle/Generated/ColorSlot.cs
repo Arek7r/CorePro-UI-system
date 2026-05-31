@@ -14,5 +14,6 @@ namespace CorePro.UI
         Positive = 5,
         Transparent_5 = 6,
         Transparent_25 = 7,
+        Black = 8,
     }
 }

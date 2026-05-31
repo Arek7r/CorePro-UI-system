@@ -505,15 +505,41 @@ namespace CorePro.Editor.Framework
         // == Sub-header ==
 
         /// <summary>Lightweight divider with bold label, used inside section bodies.</summary>
-        protected static void DrawSubHeader(string label)
+        protected static void DrawSubHeaderH3(string label)
         {
             EditorGUILayout.Space(3);
             Rect r = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
             EditorGUI.LabelField(r, label, EditorStyles.boldLabel);
-            EditorGUI.DrawRect(new Rect(r.x, r.yMax + 1f, r.width, 1f), new Color(0.35f, 0.35f, 0.35f, 0.6f));
-            EditorGUILayout.Space(2);
+            //EditorGUI.DrawRect(new Rect(r.x, r.yMax + 1f, r.width, 1f), new Color(0.35f, 0.35f, 0.35f, 0.6f));
         }
+        private static GUIStyle _subHeaderStyle;
 
+        protected static void DrawSubHeader(string label)
+        {
+            if (_subHeaderStyle == null)
+            {
+                _subHeaderStyle = new GUIStyle(EditorStyles.boldLabel)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                    padding   = new RectOffset(12, 6, 0, 0)
+                };
+            }
+
+            EditorGUILayout.Space(4);
+
+            Rect line = EditorGUILayout.GetControlRect(false, 20f);
+
+            // Full inspector width, ignoring indent and the section margins
+            Rect bg = new Rect(0f, line.y, EditorGUIUtility.currentViewWidth, line.height);
+
+            EditorGUI.DrawRect(bg, new Color(0.18f, 0.18f, 0.18f, 1f));                       // background bar
+            // EditorGUI.DrawRect(new Rect(bg.x, bg.y, 3f, bg.height),                            // left accent stripe
+            //     new Color(0.30f, 0.55f, 0.95f, 1f));
+
+            EditorGUI.LabelField(bg, label, _subHeaderStyle);
+            EditorGUILayout.Space(3);
+        }
+        
         // == Drawing utilities ==
 
         /// <summary>Draws a rectangular border outline.</summary>

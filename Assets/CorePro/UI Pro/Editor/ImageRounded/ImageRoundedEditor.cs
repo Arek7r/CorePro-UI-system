@@ -14,6 +14,7 @@ namespace CorePro.UI.Editor
         SerializedProperty _borderWidth;
         SerializedProperty _softness;
         SerializedProperty _styleSheet;
+        SerializedProperty _useOwnColors;
         SerializedProperty _fillColorSlot;
         SerializedProperty _borderColorSlot;
         SerializedProperty _useCustomFill;
@@ -32,6 +33,7 @@ namespace CorePro.UI.Editor
             _borderWidth     = serializedObject.FindProperty("borderWidth");
             _softness        = serializedObject.FindProperty("softness");
             _styleSheet      = serializedObject.FindProperty("styleSheet");
+            _useOwnColors    = serializedObject.FindProperty("useOwnColors");
             _fillColorSlot   = serializedObject.FindProperty("fillColorSlot");
             _borderColorSlot = serializedObject.FindProperty("borderColorSlot");
             _useCustomFill   = serializedObject.FindProperty("useCustomFillColor");
@@ -77,7 +79,6 @@ namespace CorePro.UI.Editor
 
             // Corner radii 
 
-            EditorGUILayout.LabelField("Corner Radii", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_uniformRadius, new GUIContent("Uniform Radius"));
 
             if (_uniformRadius.boolValue)
@@ -105,26 +106,36 @@ namespace CorePro.UI.Editor
             EditorGUILayout.Space(6);
 
             // Border 
-            EditorGUILayout.LabelField("Border", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_borderWidth, new GUIContent("Width (px)"));
             EditorGUILayout.PropertyField(_softness,    new GUIContent("AA Softness (px)"));
 
             EditorGUILayout.Space(6);
 
             // Colors 
-            EditorGUILayout.LabelField("Colors", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_useOwnColors, new GUIContent("Use Own Colors"));
+
+            bool ownColors = _useOwnColors.boolValue;
+
             EditorGUILayout.PropertyField(_styleSheet, new GUIContent("Style Sheet"));
 
             EditorGUILayout.Space(2);
 
+            if (!ownColors)
+            {
+                EditorGUILayout.HelpBox("Fill color is driven by Image.color.", MessageType.Info);
+            }
+
             // Fill color
-            DrawColorSlot(
-                label:           "Fill",
-                sheet:           sheet,
-                useColors:       true,
-                slotProp:        _fillColorSlot,
-                useCustomProp:   _useCustomFill,
-                customColorProp: _customFill);
+            using (new EditorGUI.DisabledScope(!ownColors))
+            {
+                DrawColorSlot(
+                    label:           "Fill",
+                    sheet:           sheet,
+                    useColors:       true,
+                    slotProp:        _fillColorSlot,
+                    useCustomProp:   _useCustomFill,
+                    customColorProp: _customFill);
+            }
 
             EditorGUILayout.Space(2);
 

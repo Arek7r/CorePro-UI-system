@@ -210,9 +210,13 @@ Shader "CorePro/UI/RoundedUI"
                 float4 borderPre = float4(borderColor.rgb * borderColor.a, borderColor.a);
 
                 // "over" composite: border on top of fill, blended by innerAlpha
-                // innerAlpha == 1  → fully inside fill area  → pure fill
-                // innerAlpha == 0  → fully in border band     → pure border
-                float4 composited = lerp(borderPre, fillPre, innerAlpha);
+                // innerAlpha == 1  -> fully inside fill area  -> pure fill
+                // innerAlpha == 0  -> fully in border band     -> pure border
+                // With borderWidth == 0 there is no border band, so force pure fill -
+                // otherwise the AA edge would still blend in borderColor (a thin frame).
+                float hasBorder   = step(0.0001, borderWidth);
+                float innerBlend  = lerp(1.0, innerAlpha, hasBorder);
+                float4 composited = lerp(borderPre, fillPre, innerBlend);
 
                 // Apply outer shape alpha (the rounded clip)
                 composited *= outerAlpha;

@@ -21,6 +21,12 @@ namespace CorePro.UI.Editor
         SerializedProperty _handlePosOn;
         SerializedProperty _handleDuration;
         SerializedProperty _handleCurve;
+        SerializedProperty _useColorTransition;
+        SerializedProperty _useColorStyleSheet;
+        SerializedProperty _colorTransitionSheet;
+        SerializedProperty _colorTransitions;
+        SerializedProperty _colorDuration;
+        SerializedProperty _colorCurve;
 
         // Save
         SerializedProperty _saveValue;
@@ -64,6 +70,12 @@ namespace CorePro.UI.Editor
             _handlePosOn     = serializedObject.FindProperty("handlePosOn");
             _handleDuration  = serializedObject.FindProperty("handleDuration");
             _handleCurve     = serializedObject.FindProperty("handleCurve");
+            _useColorTransition = serializedObject.FindProperty("useColorTransition");
+            _useColorStyleSheet   = serializedObject.FindProperty("useColorStyleSheet");
+            _colorTransitionSheet = serializedObject.FindProperty("colorTransitionSheet");
+            _colorTransitions   = serializedObject.FindProperty("colorTransitions");
+            _colorDuration      = serializedObject.FindProperty("colorDuration");
+            _colorCurve         = serializedObject.FindProperty("colorCurve");
 
             // Save
             _saveValue       = serializedObject.FindProperty("saveValue");
@@ -165,6 +177,7 @@ namespace CorePro.UI.Editor
                         _isOn.boolValue = true;
                         serializedObject.ApplyModifiedProperties();
                         sw.Editor_SnapHandle(true);
+                        sw.Editor_SnapColors(true);
                         EditorUtility.SetDirty(sw);
                     }
                     Event.current.Use();
@@ -179,6 +192,7 @@ namespace CorePro.UI.Editor
                         _isOn.boolValue = false;
                         serializedObject.ApplyModifiedProperties();
                         sw.Editor_SnapHandle(false);
+                        sw.Editor_SnapColors(false);
                         EditorUtility.SetDirty(sw);
                     }
                     Event.current.Use();
@@ -227,7 +241,8 @@ namespace CorePro.UI.Editor
             if (mode == UISwitchPro.AnimationMode.GenericHandle || mode == UISwitchPro.AnimationMode.Both)
             {
                 DrawSubHeader("Generic Handle Slide");
-                EditorGUI.indentLevel++;
+                // EditorGUI.indentLevel++;
+                //EditorGUI.indentLevel--;
 
                 bool hasHandle = _handleRect.objectReferenceValue != null;
 
@@ -262,7 +277,36 @@ namespace CorePro.UI.Editor
                         MessageType.Warning);
                 }
 
-                EditorGUI.indentLevel--;
+               // EditorGUI.indentLevel--;
+            }
+
+            // -- Color Transition (GenericHandle only)
+            if (mode == UISwitchPro.AnimationMode.GenericHandle)
+            {
+                EditorGUILayout.Space(4);
+                DrawSubHeader("Color Transition");
+                //EditorGUI.indentLevel++;
+
+                EditorGUILayout.PropertyField(_useColorTransition, new GUIContent("Use Color Transition",
+                    "Tint target Images from OFF color to ON color."));
+
+                if (_useColorTransition.boolValue)
+                {
+                    EditorGUILayout.Space(2);
+                    EditorGUILayout.PropertyField(_colorDuration, new GUIContent("Color Duration (s)"));
+                    EditorGUILayout.PropertyField(_colorCurve,    new GUIContent("Color Curve"));
+                    EditorGUILayout.HelpBox("If a target has ImageRounded, its 'Use Own Colors' is forced off so the tint applies.",
+                        MessageType.None);
+                    
+                    EditorGUILayout.Space(10);
+                    EditorGUILayout.PropertyField(_useColorStyleSheet, new GUIContent("Use Style Sheet",
+                        "Pick colors from a UIStyleSheet instead of custom Color Off / Color On values."));
+
+                    DrawColorTargets();
+                
+                }
+
+                //EditorGUI.indentLevel--;
             }
         }
 
@@ -360,6 +404,25 @@ namespace CorePro.UI.Editor
                 EditorStyles.centeredGreyMiniLabel);
         }
 
+        // == Color Transition targets ==
+        // Native list (default reorderable look + per-element foldout). The per-element
+        // editor is provided by ColorTransitionEntryDrawer, which swaps the Color fields
+        // for style-sheet slot dropdowns when Use Style Sheet is on.
+
+        void DrawColorTargets()
+        {
+            if (_useColorStyleSheet.boolValue)
+            {
+                EditorGUILayout.PropertyField(_colorTransitionSheet, new GUIContent("Style Sheet",
+                    "Color slots are read from this sheet by index."));
+
+                if (_colorTransitionSheet.objectReferenceValue == null)
+                    EditorGUILayout.HelpBox("Assign a Style Sheet to pick color slots.", MessageType.Warning);
+            }
+
+            EditorGUILayout.PropertyField(_colorTransitions, new GUIContent("Targets (Image / OFF / ON)"), true);
+        }
+
         // == Helpers ==
 
         void SnapHandle(bool toOn)
@@ -371,13 +434,106 @@ namespace CorePro.UI.Editor
         }
 
         /// <summary>Lightweight sub-header inside a section. Consistent style with UICheckboxProEditor.</summary>
-        new static void DrawSubHeader(string label)
+        // new static void DrawSubHeader(string label)
+        // {
+        //     EditorGUILayout.Space(3);
+        //     Rect r = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+        //     EditorGUI.LabelField(r, label, EditorStyles.boldLabel);
+        //     EditorGUI.DrawRect(new Rect(r.x, r.yMax + 1f, r.width, 1f), new Color(0.35f, 0.35f, 0.35f, 0.6f));
+        //     EditorGUILayout.Space(2);
+        // }
+    }
+
+    // Per-element drawer for UISwitchPro color transition targets.
+    // Drawn through the native list so it keeps the standard reorderable look,
+    // indentation and foldout. Reads the sibling useColorStyleSheet / colorTransitionSheet
+    // fields to decide between custom Color fields and style-sheet slot dropdowns.
+    [CustomPropertyDrawer(typeof(UISwitchPro.ColorTransitionEntry))]
+    public class ColorTransitionEntryDrawer : PropertyDrawer
+    {
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            EditorGUILayout.Space(3);
-            Rect r = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
-            EditorGUI.LabelField(r, label, EditorStyles.boldLabel);
-            EditorGUI.DrawRect(new Rect(r.x, r.yMax + 1f, r.width, 1f), new Color(0.35f, 0.35f, 0.35f, 0.6f));
-            EditorGUILayout.Space(2);
+            float line    = EditorGUIUtility.singleLineHeight;
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+
+            if (!property.isExpanded)
+                return line;
+
+            // Foldout + Target + OFF + ON
+            return (line + spacing) * 4f;
+        }
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            float line    = EditorGUIUtility.singleLineHeight;
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+
+            Rect foldRect = new Rect(position.x, position.y, position.width, line);
+            property.isExpanded = EditorGUI.Foldout(foldRect, property.isExpanded, label, true);
+
+            if (!property.isExpanded)
+                return;
+
+            EditorGUI.indentLevel++;
+
+            float y = position.y + line + spacing;
+            Rect r0 = new Rect(position.x, y, position.width, line);
+            EditorGUI.PropertyField(r0, property.FindPropertyRelative("target"), new GUIContent("Target"));
+
+            SerializedObject so = property.serializedObject;
+            bool useSheet = so.FindProperty("useColorStyleSheet").boolValue;
+            UIStyleSheet sheet = so.FindProperty("colorTransitionSheet").objectReferenceValue as UIStyleSheet;
+
+            y += line + spacing;
+            Rect r1 = new Rect(position.x, y, position.width, line);
+
+            y += line + spacing;
+            Rect r2 = new Rect(position.x, y, position.width, line);
+
+            if (useSheet && sheet != null)
+            {
+                string[] names = BuildColorNames(sheet);
+                DrawSlotRow(r1, "Color OFF", sheet, names, property.FindPropertyRelative("slotOff"));
+                DrawSlotRow(r2, "Color ON",  sheet, names, property.FindPropertyRelative("slotOn"));
+            }
+            else
+            {
+                EditorGUI.PropertyField(r1, property.FindPropertyRelative("colorOff"), new GUIContent("Color OFF"));
+                EditorGUI.PropertyField(r2, property.FindPropertyRelative("colorOn"),  new GUIContent("Color ON"));
+            }
+
+            EditorGUI.indentLevel--;
+        }
+
+        static void DrawSlotRow(Rect r, string label, UIStyleSheet sheet, string[] colorNames, SerializedProperty slotProp)
+        {
+            const float swatchW = 18f;
+            const float gap     = 4f;
+
+            Rect swatchRect = new Rect(r.xMax - swatchW, r.y, swatchW, r.height);
+            Rect popupRect  = new Rect(r.x, r.y, swatchRect.x - r.x - gap, r.height);
+
+            int cur  = Mathf.Clamp(slotProp.intValue, 0, colorNames.Length - 1);
+            int next = EditorGUI.Popup(popupRect, label, cur, colorNames);
+            if (next != cur)
+                slotProp.intValue = next;
+
+            EditorGUI.DrawRect(swatchRect, sheet.GetColor(next));
+        }
+
+        static string[] BuildColorNames(UIStyleSheet sheet)
+        {
+            if (sheet == null)
+                return new[] { "-" };
+
+            var names = new string[sheet.Colors.Count];
+            for (int i = 0; i < sheet.Colors.Count; i++)
+            {
+                names[i] = string.IsNullOrWhiteSpace(sheet.Colors[i].name)
+                    ? $"Slot {i}"
+                    : $"{i}: {sheet.Colors[i].name}";
+            }
+            return names;
         }
     }
 }

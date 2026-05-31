@@ -14,16 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CorePro.UI.UIStyleSheet
   colors:
   - name: Primary
-    color: {r: 0.4056604, g: 0.4056604, b: 0.4056604, a: 1}
+    color: {r: 0.85882354, g: 0.85882354, b: 0.85882354, a: 1}
     stableId: 0
   - name: Secondary
     color: {r: 0.3018868, g: 0.3018868, b: 0.3018868, a: 1}
     stableId: 1
   - name: Accent
-    color: {r: 0, g: 0.42956018, b: 1, a: 1}
+    color: {r: 0, g: 0.53333336, b: 1, a: 1}
     stableId: 2
   - name: Background
-    color: {r: 0, g: 0, b: 0, a: 1}
+    color: {r: 0.7924528, g: 0.7924528, b: 0.7924528, a: 1}
     stableId: 3
   - name: Negative
     color: {r: 0.6226415, g: 0.0734247, b: 0.0734247, a: 1}
@@ -37,15 +37,18 @@ MonoBehaviour:
   - name: Transparent_25
     color: {r: 1, g: 1, b: 1, a: 0.2509804}
     stableId: 7
+  - name: Black
+    color: {r: 0.11320752, g: 0.11320752, b: 0.11320752, a: 1}
+    stableId: 8
   fontColors:
   - name: Text1
-    color: {r: 0.94509804, g: 0.94509804, b: 0.94509804, a: 1}
+    color: {r: 0.8584906, g: 0.8584906, b: 0.8584906, a: 1}
     stableId: 0
   - name: Text2
     color: {r: 1, g: 1, b: 1, a: 0.3254902}
     stableId: 1
   - name: Accent Text Color
-    color: {r: 0, g: 0.43137255, b: 1, a: 1}
+    color: {r: 0, g: 0.53333336, b: 1, a: 1}
     stableId: 2
   - name: Text1Dark
     color: {r: 0.29803923, g: 0.29803923, b: 0.29803923, a: 1}
@@ -54,26 +57,26 @@ MonoBehaviour:
     color: {r: 0.7058824, g: 0.7058824, b: 0.7058824, a: 1}
     stableId: 4
   - name: Black
-    color: {r: 0, g: 0, b: 0, a: 1}
+    color: {r: 0.11372549, g: 0.11372549, b: 0.11372549, a: 1}
     stableId: 5
   - name: Transparent_10
     color: {r: 1, g: 1, b: 1, a: 0.09803922}
     stableId: 6
   fonts:
   - name: Heading
-    font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-    size: 40
+    font: {fileID: 11400000, guid: b71817737733b91479072b6768c020ad, type: 2}
+    size: 30
     stableId: 0
   - name: Heading Sub
-    font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-    size: 30
+    font: {fileID: 11400000, guid: b71817737733b91479072b6768c020ad, type: 2}
+    size: 20
     stableId: 1
   - name: Button
     font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
     size: 40
     stableId: 2
   - name: Label
-    font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+    font: {fileID: 11400000, guid: 6a495cfa929f13a4785bf95498a2d4ce, type: 2}
     size: 12
     stableId: 3
   - name: Regular

@@ -63,6 +63,7 @@ GameObject:
   - component: {fileID: 8360441540918442993}
   - component: {fileID: 8360441540918442988}
   - component: {fileID: 8360441540918442991}
+  - component: {fileID: 6425639402928982440}
   m_Layer: 5
   m_Name: Off
   m_TagString: Untagged
@@ -110,14 +111,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.11320752, g: 0.11320752, b: 0.11320752, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: bdb027207a643bf4c8cbd7a2e2b2ae1b, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 4c9005d75a1ca8a4f9bff02c025b2859, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1
@@ -127,6 +128,22 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &6425639402928982440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8360441540918442992}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af57eca1a9116f04e96b4d901a349af7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CorePro.UI::CorePro.UI.UIStyleImage
+  styleSheet: {fileID: 11400000, guid: c5d307abb48d7304fb410f4f5e5818a0, type: 2}
+  colorSlot: 8
+  preserveAlpha: 0
+  useCustomColor: 0
 --- !u!1 &8360441541907133623
 GameObject:
   m_ObjectHideFlags: 0
@@ -192,7 +209,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: bdb027207a643bf4c8cbd7a2e2b2ae1b, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 4c9005d75a1ca8a4f9bff02c025b2859, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1

@@ -32,14 +32,25 @@ namespace CorePro.UI
     [DisallowMultipleComponent]
     public sealed class ImageRounded : BaseMeshEffect
     {
-        // Shared material cache 
+        // Mesh data is packed into UV1/UV2/UV3. A Canvas strips these channels by
+        // default, so we must explicitly request them - otherwise the shader reads
+        // zeros (rectSize = 0) and the element renders as a plain square. This is
+        // the cause of "square corners" inside Prefab Mode, where the temporary
+        // stage Canvas does not carry the channels the scene Canvas was set up with.
+        private const AdditionalCanvasShaderChannels RequiredChannels =
+            AdditionalCanvasShaderChannels.TexCoord1 |
+            AdditionalCanvasShaderChannels.TexCoord2 |
+            AdditionalCanvasShaderChannels.TexCoord3;
+
+        // Shared material cache
         private static Material _sharedMaterial;
 
         private static Material SharedMaterial
         {
             get
             {
-                if (_sharedMaterial != null) return _sharedMaterial;
+                if (_sharedMaterial != null) 
+                    return _sharedMaterial;
 
                 var shader = Shader.Find("CorePro/UI/RoundedUI");
                 if (shader == null)
@@ -82,6 +93,12 @@ namespace CorePro.UI
         [Tooltip("When assigned, fill color is driven by this style sheet slot.")]
         [SerializeField] private UIStyleSheet styleSheet;
 
+        [Header("Colors")]
+        [Tooltip("When on, fill color is driven by this component (style sheet / custom). " +
+                 "Turn off to let Image.color drive the fill, e.g. when an external script " +
+                 "like ButtonPro sets the color.")]
+        [SerializeField] private bool useOwnColors = true;
+
         [SerializeField] internal int fillColorSlot  = 0;
         [SerializeField] internal int borderColorSlot = 1;
 
@@ -93,20 +110,32 @@ namespace CorePro.UI
         [SerializeField] private Color customBorderColor = Color.black;
 
         // Runtime state 
-        private Image          _image;
-        private RectTransform  _rect;
+        private Image          image;
+        private RectTransform  rect;
 
-        // Unity lifecycle 
+        private void CacheComponents()
+        {
+            if (image == null)
+                image = GetComponent<Image>();
+
+            // RectTransform is the GameObject's transform on any UI object,
+            // so a cast is free and avoids a second GetComponent lookup.
+            if (rect == null)
+                rect = transform as RectTransform;
+        }
+
+        // Unity lifecycle
         protected override void Awake()
         {
-            _image = GetComponent<Image>();
-            _rect  = GetComponent<RectTransform>();
+            CacheComponents();
             base.Awake();
         }
 
         protected override void OnEnable()
         {
+            CacheComponents();
             base.OnEnable();
+            EnsureCanvasChannels();
             ApplySharedMaterial();
             UIStyleSheet.OnThemeChanged += OnThemeChanged;
             SetVerticesDirty();
@@ -119,14 +148,6 @@ namespace CorePro.UI
             base.OnDisable();
         }
 
-#if UNITY_EDITOR
-        protected override void OnValidate()
-        {
-            base.OnValidate();
-            SetVerticesDirty();
-        }
-#endif
-
         // IMeshEffect 
 
         /// <summary>
@@ -136,9 +157,12 @@ namespace CorePro.UI
         /// </summary>
         public override void ModifyMesh(VertexHelper vh)
         {
-            if (!IsActive() || vh.currentVertCount == 0) return;
+            if (!IsActive() || vh.currentVertCount == 0)
+                return;
 
-            Vector2 rectSize = _rect != null ? _rect.rect.size : Vector2.one * 100f;
+            EnsureCanvasChannels();
+
+            Vector2 rectSize = rect != null ? rect.rect.size : Vector2.one * 100f;
 
             // Resolve corner radii
             float tl, tr, br, bl;
@@ -161,13 +185,18 @@ namespace CorePro.UI
             br = Mathf.Min(br, maxR);
             bl = Mathf.Min(bl, maxR);
 
-            Color fill   = ResolveFillColor();
             Color border = ResolveBorderColor();
 
-            // Unity UI vertex colors are expected in linear space when the project
-            // uses Linear color space (Project Settings → Player → Color Space).
-            // Color32 cast alone skips gamma→linear conversion, causing hue/brightness shift.
-            // gamma.linear does the correct conversion before we bake into vertex.color.
+            // The shader writes its output straight to a linear render target, so every
+            // color must reach it already in linear space. useOwnColors picks the source:
+            //   true  -> this component drives the fill (style sheet / custom color)
+            //   false -> Image.color drives the fill (e.g. set by ButtonPro)
+            // Either way we convert to linear before baking, so the element looks the same
+            // regardless of the source and matches a plain Image of the same color.
+            Color fill = useOwnColors
+                ? ResolveFillColor()
+                : (image != null ? image.color : Color.white);
+
             var fillLinear = fill.linear;
             var fillColor32 = new Color32(
                 (byte)Mathf.RoundToInt(fillLinear.r * 255f),
@@ -175,7 +204,8 @@ namespace CorePro.UI
                 (byte)Mathf.RoundToInt(fillLinear.b * 255f),
                 (byte)Mathf.RoundToInt(fillLinear.a * 255f)
             );
-            var borderLinear = border.linear;
+
+            var borderLinear  = border.linear;
             Vector4 uv1Data   = new Vector4(rectSize.x, rectSize.y, tl, tr);
             Vector4 uv2Data   = new Vector4(br, bl, borderWidth, softness);
             Vector4 uv3Data   = new Vector4(borderLinear.r, borderLinear.g, borderLinear.b, borderLinear.a);
@@ -185,10 +215,10 @@ namespace CorePro.UI
             {
                 vh.PopulateUIVertex(ref vertex, i);
 
-                vertex.color = fillColor32;  // fill - Color32, 8bit/channel, fine for UI
+                vertex.color = fillColor32;  // fill (linear) - Color32, 8bit/channel, fine for UI
                 vertex.uv1   = uv1Data;
                 vertex.uv2   = uv2Data;
-                vertex.uv3   = uv3Data;      // border color - raw float4
+                vertex.uv3   = uv3Data;      // border color (linear) - float4
 
                 vh.SetUIVertex(vertex, i);
             }
@@ -211,20 +241,40 @@ namespace CorePro.UI
             return styleSheet.GetColor(borderColorSlot);
         }
 
-        // Material management 
+        // Canvas channel management
+
+        /// <summary>
+        /// Makes sure the Canvas this element renders to carries the UV channels
+        /// we pack our data into. Guarded so it only writes when a channel is
+        /// missing, which keeps it from triggering a rebuild loop.
+        /// </summary>
+        private void EnsureCanvasChannels()
+        {
+            Canvas canvas = image != null ? image.canvas : null;
+            if (canvas == null)
+                return;
+
+            var current = canvas.additionalShaderChannels;
+            if ((current & RequiredChannels) != RequiredChannels)
+                canvas.additionalShaderChannels = current | RequiredChannels;
+        }
+
+        // Material management
         private void ApplySharedMaterial()
         {
-            if (_image == null) _image = GetComponent<Image>();
-            if (_image == null) return;
+            if (image == null) 
+                return;
 
             var mat = SharedMaterial;
-            if (mat != null) _image.material = mat;
+            if (mat != null) 
+                image.material = mat;
         }
 
         private void RestoreDefaultMaterial()
         {
-            if (_image == null) return;
-            _image.material = null; // resets to default UI material
+            if (image == null)
+                return;
+            image.material = null; // resets to default UI material
         }
 
         // Theme change callback 
@@ -284,6 +334,16 @@ namespace CorePro.UI
         }
 
         /// <summary>
+        /// Toggles whether the fill color is driven by this component or by Image.color.
+        /// Turn off to let external scripts (e.g. ButtonPro) color the element via Image.color.
+        /// </summary>
+        public void SetUseOwnColors(bool value)
+        {
+            useOwnColors = value;
+            SetVerticesDirty();
+        }
+
+        /// <summary>
         /// Re-links this element to the style sheet for the given slots
         /// and clears any custom color overrides.
         /// </summary>
@@ -301,8 +361,8 @@ namespace CorePro.UI
 
         private void SetVerticesDirty()
         {
-            if (_image != null) 
-                _image.SetVerticesDirty();
+            if (image != null) 
+                image.SetVerticesDirty();
         }
     }
 }
